@@ -275,7 +275,13 @@ async def upload_document(
     if len(data) > MAX_DOCUMENT_BYTES:
         raise HTTPException(status_code=413, detail="Document trop volumineux (15 Mo max)")
 
-    text = await run_in_threadpool(extract_document, data, ext)
+    try:
+        text = await run_in_threadpool(extract_document, data, ext)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=422,
+                            detail=f"Document illisible ou corrompu (.{ext}). {str(e)[:120]}")
     if len(text.strip()) < 40:
         raise HTTPException(status_code=422,
                             detail="Aucun texte exploitable extrait. Le document est peut-être scanné en image.")

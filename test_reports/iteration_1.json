@@ -1,0 +1,50 @@
+{
+  "summary": "Full E2E validation for Quortiv (both backend + frontend). Backend: pytest regression suite = 32/32 passed and legacy e2e smoke = 57/57 passed after fixing one crash on corrupted PDF upload (500 -> 422). Frontend: onboarding + 'Essayer sans compte' (guest) -> Home (Bon après-midi, tab bar 5 items complets: Accueil / Bibliothèque / + / Pilotage / Profil) -> Bibliothèque (Toutes les notes / Favoris / Modèles / Carte des connaissances / Archives, dossiers seed Travail/Personnel/Idées) -> Pilotage (stats, chart, taux completion) -> Profil (langue/apparence/niveau synthèse) -> Capture Texte -> Note detail (tabs Synthèse/Transcription/Actions/Assistant) avec analyse IA réelle rendant Contexte, Points clés, Décisions, Prochaines étapes, tags et actions -> Chat contextuel (Assistant) -> Graph (Carte des connaissances) -> Assistant global. Aucun texte superposé, empilé lettre-par-lettre ou tronqué. Aucun red-screen. Aucun package Expo déprécié (pas d'expo-av / expo-barcode-scanner / expo-background-fetch).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/notes/from-document",
+        "issue": "Un PDF corrompu / tronqué faisait crasher pypdf et renvoyait 500. Corrigé sur place (capture.py) en enveloppant extract_document dans un try/except renvoyant 422 avec message clair. Vérifié via pytest."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "note/[id]",
+        "issues": [
+          "Nommage des onglets: la spec de la review request mentionne 'Résumé/Transcription/Chat' mais l'UI livre 'Synthèse/Transcription/Actions/Assistant' (4 onglets). Fonctionnellement complet (Assistant = chat contextuel) — à confirmer côté product si le renommage est intentionnel."
+        ]
+      }
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_quortiv_regression.py",
+    "/app/backend/tests/test_api_e2e.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Confirmer avec l'utilisateur si le libellé des onglets 'Synthèse/Actions/Assistant' est voulu à la place de 'Résumé/Chat' (aucun impact fonctionnel, uniquement nommage)."
+  ],
+  "critical_code_review_comments": [
+    "capture.py upload_document: bien penser à toujours envelopper les extracteurs tiers (pypdf, python-docx, etc.) dans un try/except pour renvoyer un 4xx métier (fait pour PDF; recommandé d'appliquer le même pattern à docx/odt si non couvert).",
+    "server.py + routers: modularisation propre (auth/capture/exports/insights/intelligence/library/notes), aucune violation majeure repérée."
+  ],
+  "updated_files": [
+    "/app/backend/app/routers/capture.py"
+  ],
+  "success_rate": {
+    "backend": "100% (32/32 pytest + 57/57 e2e smoke)",
+    "frontend": "100% des flows testés (onboarding, guest, tabs, capture texte, note detail + tabs, chat contextuel, library, insights, graph, assistant global)"
+  },
+  "seed_data_creation": "2 comptes invités créés via POST /api/auth/guest pendant le test UI, chacun avec 1 note IA analysée (Réunion produit et Sprint planning). Les tests pytest nettoient leurs propres données via DELETE /api/auth/me. Les 2 comptes UI restent (données invitées, isolées par token).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend 100% vert (32 pytest + 57 e2e). Frontend rendu premium confirmé sur écrans clés. Seul écart mineur: onglets note détail = Synthèse/Transcription/Actions/Assistant (au lieu du triplet Résumé/Transcription/Chat de la spec). Fix backend appliqué: extract_document PDF corrompu -> 422 au lieu de 500.",
+  "rca_of_issue": "Bug PDF: pypdf lève PdfStreamError('Stream has ended unexpectedly') sur PDF tronqué, l'exception remonte jusqu'à FastAPI -> 500 Internal Server Error. Repro: POST /api/notes/from-document avec un fichier 'x.pdf' ne contenant que le header PDF. Mitigation appliquée dans capture.py: try/except autour de run_in_threadpool(extract_document, ...), re-raise HTTPException et enveloppe toute autre exception en HTTPException(422, 'Document illisible ou corrompu...'). Test test_from_document_pdf passe désormais (200/400/422 acceptés). Redémarrage backend fait via supervisorctl."
+}

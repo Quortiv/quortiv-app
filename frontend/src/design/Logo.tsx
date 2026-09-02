@@ -5,26 +5,25 @@ import { View } from 'react-native';
 import { palette } from './tokens';
 
 /**
- * Quortiv mark — an open ring cut by a rising diagonal.
- * Rendered as vector so it stays crisp at every size and adapts to dark mode.
+ * Quortiv mark — a bold "Q": a solid dark ring with an electric-blue tail
+ * rising through the lower-right. Vector so it stays crisp and adapts to dark mode.
  */
 export function LogoMark({ size = 40, ring, slash }: { size?: number; ring?: string; slash?: string }) {
   const s = size;
   return (
-    <Svg width={s} height={s} viewBox="0 0 48 48">
+    <Svg width={s} height={s} viewBox="0 0 48 48" fill="none">
+      {/* Solid Q ring */}
       <Circle
-        cx={21}
+        cx={21.5}
         cy={21}
-        r={14.5}
+        r={14}
         stroke={ring || palette.navy700}
-        strokeWidth={6}
+        strokeWidth={7}
         fill="none"
-        strokeDasharray="72 20"
-        strokeDashoffset={-28}
-        strokeLinecap="round"
       />
+      {/* Electric-blue rising tail (parallelogram) crossing the lower-right edge */}
       <Path
-        d="M17.5 39.5 L31 20.5 L40.5 20.5 L27 39.5 Z"
+        d="M30.2 23.8 L43.2 36.8 L36.8 43.2 L23.8 30.2 Z"
         fill={slash || palette.blue500}
       />
     </Svg>

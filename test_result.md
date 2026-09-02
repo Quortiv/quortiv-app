@@ -101,3 +101,150 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Quortiv — application premium de prise de notes IA. Refonte totale UI/UX (Navy #1B2333 + Bleu électrique #2E5BFF), capture universelle, transcription/diarisation/traduction, intelligence IA, organisation, exports PDF/texte, insights + graphe. Validation E2E complète après refactor massif (backend modulaire + frontend design system). Logo corrigé pour correspondre à la marque."
+
+backend:
+  - task: "Auth (guest + Google) /api/auth/*"
+    implemented: true
+    working: "NA"
+    file: "backend/app/routers/auth.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Post-refactor modular routers. Needs full E2E validation."
+  - task: "Library folders + templates /api/library/*"
+    implemented: true
+    working: "NA"
+    file: "backend/app/routers/library.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Needs retest after modularization."
+  - task: "Capture (record/text/link/meeting) /api/capture/*"
+    implemented: true
+    working: "NA"
+    file: "backend/app/routers/capture.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Needs retest incl. transcription pipeline."
+  - task: "Intelligence (summary/translate/diarize/chat) /api/intelligence/*"
+    implemented: true
+    working: "NA"
+    file: "backend/app/routers/intelligence.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Uses Emergent LLM key (Claude/Whisper)."
+  - task: "Exports (pdf/markdown/text) /api/exports/*"
+    implemented: true
+    working: "NA"
+    file: "backend/app/routers/exports.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "reportlab/python-docx generation."
+  - task: "Insights analytics /api/insights/*"
+    implemented: true
+    working: "NA"
+    file: "backend/app/routers/insights.py"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Dashboard stats + note graph links."
+  - task: "Notes CRUD /api/notes/*"
+    implemented: true
+    working: "NA"
+    file: "backend/app/routers/notes.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Needs retest after modularization."
+
+frontend:
+  - task: "Onboarding + Auth (guest) flow"
+    implemented: true
+    working: true
+    file: "frontend/app/onboarding.tsx, frontend/app/auth/login.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Verified via screenshots: renders cleanly, logo corrected."
+  - task: "Home tab + Quick capture + tab bar"
+    implemented: true
+    working: true
+    file: "frontend/app/(tabs)/index.tsx, frontend/app/(tabs)/_layout.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Verified: labels full, no character-stacking. Earlier user screenshots were from pre-fork broken state."
+  - task: "Profile + preferences"
+    implemented: true
+    working: true
+    file: "frontend/app/(tabs)/profile.tsx"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Verified renders cleanly incl. date on single line, Modifier button placed."
+  - task: "Library, Insights, Graph, Note detail (tabs), Assistant, Capture sheets"
+    implemented: true
+    working: "NA"
+    file: "frontend/app/(tabs)/library.tsx, insights.tsx, frontend/app/graph.tsx, frontend/app/note/[id].tsx, frontend/app/assistant.tsx, frontend/app/capture/*"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Not yet visually validated end-to-end."
+
+metadata:
+  created_by: "main_agent"
+  version: "2.0"
+  test_sequence: 0
+  run_ui: true
+
+test_plan:
+  current_focus:
+    - "Capture (record/text/link/meeting) /api/capture/*"
+    - "Intelligence (summary/translate/diarize/chat) /api/intelligence/*"
+    - "Exports (pdf/markdown/text) /api/exports/*"
+    - "Library, Insights, Graph, Note detail (tabs), Assistant, Capture sheets"
+  stuck_tasks: []
+  test_all: true
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "Fork resumed. Fixed brand logo (LogoMark now a solid Q ring + electric-blue diagonal tail matching user's real logo). Verified onboarding/auth/home/profile/tab-bar render cleanly on web (no text stacking, full labels). Please run FULL E2E: backend all routers + frontend key flows. Use guest auth (POST /api/auth/guest, or 'Essayer sans compte' testID guest-signin-btn). Emergent LLM key available for intelligence/transcription. Report any broken screen or API."
