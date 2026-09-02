@@ -1,24 +1,36 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
-    "version": "1.0.0",
-    "orientation": "portrait",
+    "name": "Quortiv",
+    "slug": "quortiv",
+    "version": "2.0.0",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "quortiv",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.doctorassistant.osimky"
+      "bundleIdentifier": "com.emergent.doctorassistant.osimky",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Record conversations to transcribe them",
+        "NSSpeechRecognitionUsageDescription": "Turn your recordings into text",
+        "NSPhotoLibraryUsageDescription": "Import audio and video files to transcribe",
+        "NSDocumentsFolderUsageDescription": "Import documents to summarise",
+        "UIBackgroundModes": ["audio"]
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#1B2333"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.doctorassistant.osimky"
+      "package": "com.emergent.doctorassistant.osimky",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.INTERNET"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -33,10 +45,16 @@
           "image": "./assets/images/splash-image.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#000000"
+          "backgroundColor": "#0C1220"
         }
       ],
-      "expo-audio"
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Record conversations to transcribe them"
+        }
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

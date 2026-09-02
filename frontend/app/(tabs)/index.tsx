@@ -1,52 +1,59 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  FlatList,
-  RefreshControl,
-  ActivityIndicator,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { colors, spacing, radius, shadow } from '@/src/theme';
-import { api } from '@/src/api';
-import { useAuth, useT } from '@/src/auth';
-import { NoteCard, Chip } from '@/src/components/Cards';
+import React, { useCallback, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-const dayjs = require('dayjs');
+import { api, Note } from '@/src/api';
+import { useAuth } from '@/src/auth';
+import { CaptureSheet } from '@/src/components/CaptureSheet';
+import { NoteCard } from '@/src/components/NoteCard';
+import { LogoMark } from '@/src/design/Logo';
+import { useTheme } from '@/src/design/ThemeProvider';
+import { useI18n } from '@/src/i18n';
+import { AppText } from '@/src/ui/AppText';
+import { IconButton } from '@/src/ui/Button';
+import { Card } from '@/src/ui/Card';
+import { EmptyState, NoteSkeleton } from '@/src/ui/Feedback';
+import { AppHeader, Container, Screen, SectionHeader } from '@/src/ui/Screen';
+import { compactNumber, firstName, formatDuration, greetingKey } from '@/src/utils/format';
+import { cacheNotes, flushOutbox, isOffline, readCachedNotes } from '@/src/utils/offline';
 
-type Note = {
-  id: string;
-  title: string;
-  created_at: string;
-  duration_sec: number;
-  status: string;
-  template_name?: string;
-};
+type Stats = Awaited<ReturnType<typeof api.stats>>;
+
+const QUICK: { icon: any; labelFr: string; labelEn: string; route: string }[] = [
+  { icon: 'mic', labelFr: 'Enregistrer', labelEn: 'Record', route: '/capture/record' },
+  { icon: 'create-outline', labelFr: 'Texte', labelEn: 'Text', route: '/capture/text' },
+  { icon: 'link-outline', labelFr: 'Lien', labelEn: 'Link', route: '/capture/link' },
+  { icon: 'chatbubbles-outline', labelFr: 'Assistant', labelEn: 'Assistant', route: '/assistant' },
+];
 
 export default function Home() {
-  const insets = useSafeAreaInsets();
+  const theme = useTheme();
+  const { t, lang } = useI18n();
   const router = useRouter();
   const { user } = useAuth();
-  const t = useT();
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [filter, setFilter] = useState<'all' | 'today' | 'week' | 'ready' | 'processing'>('all');
-  const [loading, setLoading] = useState(true);
+  const [notes, setNotes] = useState<Note[] | null>(null);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const [captureOpen, setCaptureOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const list = await api.listNotes();
-      setNotes(list);
+      const [page, s] = await Promise.all([api.listNotes({ limit: 6 }), api.stats()]);
+      setNotes(page.items);
+      setStats(s);
+      setOffline(false);
+      cacheNotes(page.items);
+      flushOutbox();
     } catch (e) {
-      console.warn('load notes failed', e);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isOffline(e)) {
+        const cached = await readCachedNotes();
+        setNotes(cached?.notes ?? []);
+        setOffline(true);
+      } else {
+        setNotes([]);
+      }
     }
   }, []);
 
@@ -56,138 +63,183 @@ export default function Home() {
     }, [load])
   );
 
-  const filtered = notes.filter((n) => {
-    if (filter === 'all') return true;
-    if (filter === 'ready') return n.status === 'ready';
-    if (filter === 'processing') return n.status === 'processing';
-    const now = dayjs();
-    const created = dayjs(n.created_at);
-    if (filter === 'today') return created.isSame(now, 'day');
-    if (filter === 'week') return now.diff(created, 'day') < 7;
-    return true;
-  });
-
-  const formatDur = (s: number) => {
-    if (!s) return '';
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m}:${String(sec).padStart(2, '0')}`;
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
   };
 
+  const metrics = [
+    { label: t('notes_count'), value: compactNumber(stats?.total_notes), icon: 'document-text-outline' as const },
+    { label: t('this_week'), value: compactNumber(stats?.notes_this_week), icon: 'trending-up-outline' as const },
+    { label: t('note_actions'), value: compactNumber(stats?.open_actions), icon: 'checkbox-outline' as const },
+  ];
+
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>{t('home_greeting')} 👋</Text>
-          <Text style={styles.name}>{user?.name || user?.email?.split('@')[0]}</Text>
-        </View>
-        <View style={styles.avatar} testID="user-avatar">
-          <Text style={styles.avatarText}>
-            {(user?.name || user?.email || '?').substring(0, 1).toUpperCase()}
-          </Text>
+    <Screen
+      scroll
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      testID="home-screen"
+      header={
+        <AppHeader
+          left={<LogoMark size={28} ring={theme.colors.text} slash={theme.colors.brand} />}
+          right={
+            <View style={styles.headerActions}>
+              <IconButton
+                icon="search"
+                onPress={() => router.push('/search')}
+                accessibilityLabel={t('search_title')}
+                testID="home-search"
+              />
+              <IconButton
+                icon="notifications-outline"
+                onPress={() => router.push('/actions')}
+                badge={stats?.open_actions}
+                accessibilityLabel={t('actions_title')}
+                testID="home-actions"
+              />
+            </View>
+          }
+        />
+      }
+    >
+      <View style={styles.hero}>
+        <AppText variant="title1" numberOfLines={2}>
+          {t(greetingKey())}
+          {user?.name && !user.is_guest ? `, ${firstName(user.name)}` : ''}
+        </AppText>
+        <AppText variant="callout" tone="muted">
+          {t('home_prompt')}
+        </AppText>
+      </View>
+
+      {offline ? (
+        <Card variant="flat" style={styles.offline}>
+          <Ionicons name="cloud-offline-outline" size={18} color={theme.colors.warning} />
+          <View style={styles.flex}>
+            <AppText variant="label">{t('offline_title')}</AppText>
+            <AppText variant="caption" tone="muted">
+              {t('offline_desc')}
+            </AppText>
+          </View>
+        </Card>
+      ) : null}
+
+      <View style={styles.metrics}>
+        {metrics.map((m) => (
+          <Card key={m.label} variant="flat" style={styles.metric} padded={false}>
+            <View style={styles.metricInner}>
+              <Ionicons name={m.icon} size={15} color={theme.colors.textMuted} />
+              <AppText variant="title2">{m.value}</AppText>
+              <AppText variant="micro" tone="muted" numberOfLines={1}>
+                {m.label}
+              </AppText>
+            </View>
+          </Card>
+        ))}
+      </View>
+
+      <View style={styles.section}>
+        <SectionHeader title={t('quick_capture')} />
+        <View style={styles.quickGrid}>
+          {QUICK.map((q) => (
+            <Pressable
+              key={q.route}
+              onPress={() => router.push(q.route as any)}
+              testID={`quick-${q.icon}`}
+              accessibilityRole="button"
+              accessibilityLabel={lang === 'fr' ? q.labelFr : q.labelEn}
+              style={({ pressed }) => [
+                styles.quickItem,
+                {
+                  backgroundColor: theme.colors.surface,
+                  borderColor: theme.colors.border,
+                  borderRadius: theme.radius.md,
+                  opacity: pressed ? 0.8 : 1,
+                },
+                theme.shadows.xs,
+              ]}
+            >
+              <View
+                style={[
+                  styles.quickIcon,
+                  { backgroundColor: theme.colors.brandSoft, borderRadius: theme.radius.sm },
+                ]}
+              >
+                <Ionicons name={q.icon} size={19} color={theme.colors.brand} />
+              </View>
+              <AppText variant="caption" numberOfLines={1}>
+                {lang === 'fr' ? q.labelFr : q.labelEn}
+              </AppText>
+            </Pressable>
+          ))}
         </View>
       </View>
 
-      <Text style={styles.subtitle}>{t('home_subtitle')}</Text>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chipsRow}
-        style={styles.chipsScroll}
-      >
-        <Chip label={t('filter_all')} active={filter === 'all'} onPress={() => setFilter('all')} testID="chip-all" />
-        <Chip label={t('filter_today')} active={filter === 'today'} onPress={() => setFilter('today')} testID="chip-today" />
-        <Chip label={t('filter_week')} active={filter === 'week'} onPress={() => setFilter('week')} testID="chip-week" />
-        <Chip label={t('filter_ready')} active={filter === 'ready'} onPress={() => setFilter('ready')} testID="chip-ready" />
-        <Chip label={t('filter_processing')} active={filter === 'processing'} onPress={() => setFilter('processing')} testID="chip-processing" />
-      </ScrollView>
-
-      {loading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} color={colors.brandPrimary} />
-      ) : filtered.length === 0 ? (
-        <View style={styles.empty}>
-          <View style={styles.emptyIcon}>
-            <Ionicons name="mic-outline" size={40} color={colors.brandPrimary} />
-          </View>
-          <Text style={styles.emptyTitle}>{t('empty_notes_title')}</Text>
-          <Text style={styles.emptyDesc}>{t('empty_notes_desc')}</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(n) => n.id}
-          contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: 120 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
-          renderItem={({ item }) => (
-            <NoteCard
-              testID={`note-card-${item.id}`}
-              title={item.title}
-              date={dayjs(item.created_at).format('DD MMM')}
-              duration={formatDur(item.duration_sec)}
-              tag={item.template_name}
-              status={item.status}
-              onPress={() => router.push(`/note/${item.id}` as any)}
-            />
-          )}
+      <View style={styles.section}>
+        <SectionHeader
+          title={t('recent_notes')}
+          action={notes?.length ? t('see_all') : undefined}
+          onAction={() => router.push('/notes')}
         />
-      )}
+        {notes === null ? (
+          <View style={styles.list}>
+            <NoteSkeleton />
+            <NoteSkeleton />
+          </View>
+        ) : notes.length === 0 ? (
+          <EmptyState
+            icon="sparkles-outline"
+            title={t('no_notes_title')}
+            description={t('no_notes_desc')}
+            actionLabel={t('create_first')}
+            onAction={() => setCaptureOpen(true)}
+            testID="home-empty"
+          />
+        ) : (
+          <View style={styles.list}>
+            {notes.map((note) => (
+              <NoteCard key={note.id} note={note} onPress={() => router.push(`/note/${note.id}` as any)} />
+            ))}
+          </View>
+        )}
+      </View>
 
-      <Pressable
-        testID="new-recording-fab"
-        style={[styles.fab, shadow.fab, { bottom: insets.bottom + 76 }]}
-        onPress={() => router.push('/new-recording' as any)}
-      >
-        <Ionicons name="mic" size={22} color={colors.onBrandPrimary} />
-        <Text style={styles.fabText}>{t('new_recording')}</Text>
-      </Pressable>
-    </View>
+      {stats && stats.total_duration_sec > 0 ? (
+        <Container padded={false} style={styles.footerNote}>
+          <AppText variant="micro" tone="muted" center>
+            {formatDuration(stats.total_duration_sec)} · {compactNumber(stats.total_words)} {t('words')}
+          </AppText>
+        </Container>
+      ) : null}
+
+      <CaptureSheet visible={captureOpen} onClose={() => setCaptureOpen(false)} />
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.surfaceSecondary },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  greeting: { fontSize: 14, color: colors.muted },
-  name: { fontSize: 22, fontWeight: '700', color: colors.onSurface, marginTop: 2 },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.brandPrimary,
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  hero: { gap: 4, marginBottom: 20 },
+  offline: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
+  flex: { flex: 1 },
+  metrics: { flexDirection: 'row', gap: 10 },
+  metric: { flex: 1 },
+  metricInner: { padding: 14, gap: 3, alignItems: 'flex-start' },
+  section: { marginTop: 28 },
+  quickGrid: { flexDirection: 'row', gap: 10 },
+  quickItem: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  avatarText: { color: colors.onBrandPrimary, fontWeight: '700' },
-  subtitle: { paddingHorizontal: spacing.lg, color: colors.onSurfaceSecondary, marginBottom: spacing.md },
-  chipsScroll: { maxHeight: 56, flexGrow: 0, marginBottom: spacing.sm },
-  chipsRow: { gap: spacing.sm, paddingHorizontal: spacing.lg, alignItems: 'center', height: 56 },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
-  emptyIcon: {
-    width: 88, height: 88, borderRadius: 44,
-    backgroundColor: colors.brandTertiary,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: spacing.lg,
-  },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: colors.onSurface, marginBottom: 6 },
-  emptyDesc: { fontSize: 14, color: colors.muted, textAlign: 'center' },
-  fab: {
-    position: 'absolute',
-    right: spacing.lg,
-    backgroundColor: colors.brandPrimary,
-    paddingHorizontal: spacing.lg,
+    gap: 8,
     paddingVertical: 14,
-    borderRadius: radius.pill,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+    paddingHorizontal: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 84,
   },
-  fabText: { color: colors.onBrandPrimary, fontWeight: '700', fontSize: 15 },
+  quickIcon: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  list: { gap: 10 },
+  footerNote: { marginTop: 24 },
 });
